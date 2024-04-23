@@ -364,17 +364,21 @@ class Runner:
                     Runner.handle_termination(child.pid)
                     self.timed_out = True
 
-            logger.warning(f"CHILD_ISALIVE: {child.isalive()}")
-            logger.warning(
-                f"canceled: {self.canceled}, timedout: {self.timed_out}, errored: {self.errored}, rc: {self.rc}, status: {self.status}"
-            )
-
             # fix for https://github.com/ansible/ansible-runner/issues/1330
             # Since we're (ab)using pexpect's logging callback as our source of stdout data, we need to pump the stream one last
             # time, in case any new output was written by the child between the last return from expect and its termination. Ideally
             # this would have an arbitrarily large timeout value as well, in case a ridiculous amount of data was written, but just
             # invoking one last pump should cover the vast majority of real-world cases.
-            child.expect(pexpect.EOF, timeout=5)
+            try:
+                child.expect(pexpect.EOF, timeout=5)
+            except e as Exception:
+                logger.warning(f"CHILD_ISALIVE: {child.isalive()}")
+                logger.warning(
+                    f"canceled: {self.canceled}, timedout: {self.timed_out}, errored: {self.errored}, rc: {self.rc}, status: {self.status}"
+                )
+                for h in logger.handlers:
+                    h.flush()
+                raise e
 
             # close the child to ensure no more output will be written before we close the stream interposers
             child.close()
