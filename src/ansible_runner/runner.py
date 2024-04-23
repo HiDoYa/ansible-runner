@@ -21,13 +21,21 @@ from .utils import OutputEventFilter, cleanup_artifact_dir, ensure_str, collect_
 from .exceptions import CallbackError, AnsibleRunnerException
 
 
-logger = logging.getLogger('ansible-runner')
+logger = logging.getLogger("ansible-runner")
 
 
 class Runner:
 
-    def __init__(self, config, cancel_callback=None, remove_partials=True, event_handler=None,
-                 artifacts_handler=None, finished_callback=None, status_handler=None):
+    def __init__(
+        self,
+        config,
+        cancel_callback=None,
+        remove_partials=True,
+        event_handler=None,
+        artifacts_handler=None,
+        finished_callback=None,
+        status_handler=None,
+    ):
         self.config = config
         self.cancel_callback = cancel_callback
         self.event_handler = event_handler
@@ -43,46 +51,51 @@ class Runner:
         self.last_stdout_update = 0.0
 
         # default runner mode to pexpect
-        self.runner_mode = self.config.runner_mode if hasattr(self.config, 'runner_mode') else 'pexpect'
+        self.runner_mode = self.config.runner_mode if hasattr(self.config, "runner_mode") else "pexpect"
 
-        self.directory_isolation_path = self.config.directory_isolation_path if hasattr(self.config, 'directory_isolation_path') else None
-        self.directory_isolation_cleanup = self.config.directory_isolation_cleanup if hasattr(self.config, 'directory_isolation_cleanup') else None
-        self.process_isolation = self.config.process_isolation if hasattr(self.config, 'process_isolation') else None
-        self.process_isolation_path_actual = self.config.process_isolation_path_actual if hasattr(self.config, 'process_isolation_path_actual') else None
+        self.directory_isolation_path = (
+            self.config.directory_isolation_path if hasattr(self.config, "directory_isolation_path") else None
+        )
+        self.directory_isolation_cleanup = (
+            self.config.directory_isolation_cleanup if hasattr(self.config, "directory_isolation_cleanup") else None
+        )
+        self.process_isolation = self.config.process_isolation if hasattr(self.config, "process_isolation") else None
+        self.process_isolation_path_actual = (
+            self.config.process_isolation_path_actual if hasattr(self.config, "process_isolation_path_actual") else None
+        )
 
     def event_callback(self, event_data):
-        '''
+        """
         Invoked for every Ansible event to collect stdout with the event data and store it for
         later use
-        '''
+        """
         self.last_stdout_update = time.time()
-        if 'uuid' in event_data:
+        if "uuid" in event_data:
             filename = f"{event_data['uuid']}-partial.json"
-            partial_filename = os.path.join(self.config.artifact_dir,
-                                            'job_events',
-                                            filename)
-            full_filename = os.path.join(self.config.artifact_dir,
-                                         'job_events',
-                                         f"{event_data['counter']}-{event_data['uuid']}.json"
-                                         )
+            partial_filename = os.path.join(self.config.artifact_dir, "job_events", filename)
+            full_filename = os.path.join(
+                self.config.artifact_dir, "job_events", f"{event_data['counter']}-{event_data['uuid']}.json"
+            )
             try:
-                event_data.update({'runner_ident': str(self.config.ident)})
+                event_data.update({"runner_ident": str(self.config.ident)})
                 try:
-                    with codecs.open(partial_filename, 'r', encoding='utf-8') as read_file:
+                    with codecs.open(partial_filename, "r", encoding="utf-8") as read_file:
                         partial_event_data = json.load(read_file)
                     event_data.update(partial_event_data)
                     if self.remove_partials:
                         os.remove(partial_filename)
                 except IOError as e:
-                    msg = "Failed to open ansible stdout callback plugin partial data" \
-                          f" file {partial_filename} with error {str(e)}"
+                    msg = (
+                        "Failed to open ansible stdout callback plugin partial data"
+                        f" file {partial_filename} with error {str(e)}"
+                    )
                     debug(msg)
                     if self.config.check_job_event_data:
                         raise AnsibleRunnerException(msg) from e
 
                 # prefer 'created' from partial data, but verbose events set time here
-                if 'created' not in event_data:
-                    event_data['created'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                if "created" not in event_data:
+                    event_data["created"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
                 if self.event_handler is not None:
                     should_write = self.event_handler(event_data)
@@ -91,8 +104,8 @@ class Runner:
                 for plugin in ansible_runner.plugins:
                     ansible_runner.plugins[plugin].event_handler(self.config, event_data)
                 if should_write:
-                    temporary_filename = full_filename + '.tmp'
-                    with codecs.open(temporary_filename, 'w', encoding='utf-8') as write_file:
+                    temporary_filename = full_filename + ".tmp"
+                    with codecs.open(temporary_filename, "w", encoding="utf-8") as write_file:
                         os.chmod(temporary_filename, stat.S_IRUSR | stat.S_IWUSR)
                         json.dump(event_data, write_file)
                     os.rename(temporary_filename, full_filename)
@@ -101,27 +114,27 @@ class Runner:
 
     def status_callback(self, status):
         self.status = status
-        status_data = {'status': status, 'runner_ident': str(self.config.ident)}
-        if status == 'starting':
-            status_data.update({'command': self.config.command, 'env': self.config.env, 'cwd': self.config.cwd})
+        status_data = {"status": status, "runner_ident": str(self.config.ident)}
+        if status == "starting":
+            status_data.update({"command": self.config.command, "env": self.config.env, "cwd": self.config.cwd})
         for plugin in ansible_runner.plugins:
             ansible_runner.plugins[plugin].status_handler(self.config, status_data)
         if self.status_handler is not None:
             self.status_handler(status_data, runner_config=self.config)
 
     def run(self):
-        '''
+        """
         Launch the Ansible task configured in self.config (A RunnerConfig object), returns once the
         invocation is complete
-        '''
+        """
 
         # pylint: disable=R1732
 
         password_patterns = []
         password_values = []
 
-        self.status_callback('starting')
-        command_filename = os.path.join(self.config.artifact_dir, 'command')
+        self.status_callback("starting")
+        command_filename = os.path.join(self.config.artifact_dir, "command")
 
         try:
             os.makedirs(self.config.artifact_dir, mode=0o700)
@@ -131,41 +144,41 @@ class Runner:
             else:
                 raise
 
-        job_events_path = os.path.join(self.config.artifact_dir, 'job_events')
+        job_events_path = os.path.join(self.config.artifact_dir, "job_events")
         if not os.path.exists(job_events_path):
             os.mkdir(job_events_path, 0o700)
 
         command = self.config.command
-        with codecs.open(command_filename, 'w', encoding='utf-8') as f:
+        with codecs.open(command_filename, "w", encoding="utf-8") as f:
             os.chmod(command_filename, stat.S_IRUSR | stat.S_IWUSR)
-            json.dump(
-                {'command': command,
-                 'cwd': self.config.cwd,
-                 'env': self.config.env}, f, ensure_ascii=False
-            )
+            json.dump({"command": command, "cwd": self.config.cwd, "env": self.config.env}, f, ensure_ascii=False)
 
         if self.config.ident is not None:
             cleanup_artifact_dir(os.path.join(self.config.artifact_dir, ".."), self.config.rotate_artifacts)
 
-        if hasattr(self.config, 'suppress_ansible_output'):
+        if hasattr(self.config, "suppress_ansible_output"):
             suppress_ansible_output = self.config.suppress_ansible_output
         else:
             suppress_ansible_output = False
 
         if not self.config.suppress_output_file:
-            stdout_filename = os.path.join(self.config.artifact_dir, 'stdout')
-            stderr_filename = os.path.join(self.config.artifact_dir, 'stderr')
+            stdout_filename = os.path.join(self.config.artifact_dir, "stdout")
+            stderr_filename = os.path.join(self.config.artifact_dir, "stderr")
             os.close(os.open(stdout_filename, os.O_CREAT, stat.S_IRUSR | stat.S_IWUSR))
-            stdout_handle = codecs.open(stdout_filename, 'w', encoding='utf-8')
-            stderr_handle = codecs.open(stderr_filename, 'w', encoding='utf-8')
+            stdout_handle = codecs.open(stdout_filename, "w", encoding="utf-8")
+            stderr_handle = codecs.open(stderr_filename, "w", encoding="utf-8")
         else:
             stdout_handle = None
             stderr_handle = None
 
-        stdout_handle = OutputEventFilter(stdout_handle, self.event_callback, suppress_ansible_output, output_json=self.config.json_mode)
-        stderr_handle = OutputEventFilter(stderr_handle, self.event_callback, suppress_ansible_output, output_json=self.config.json_mode)
+        stdout_handle = OutputEventFilter(
+            stdout_handle, self.event_callback, suppress_ansible_output, output_json=self.config.json_mode
+        )
+        stderr_handle = OutputEventFilter(
+            stderr_handle, self.event_callback, suppress_ansible_output, output_json=self.config.json_mode
+        )
 
-        if self.runner_mode == 'pexpect' and not isinstance(self.config.expect_passwords, collections.OrderedDict):
+        if self.runner_mode == "pexpect" and not isinstance(self.config.expect_passwords, collections.OrderedDict):
             # We iterate over `expect_passwords.keys()` and
             # `expect_passwords.values()` separately to map matched inputs to
             # patterns and choose the proper string to send to the subprocess;
@@ -189,58 +202,53 @@ class Runner:
             pexpect_env.update(self.config.env)
             # Write the keys to pass into container to expected file in artifacts dir
             # option expecting should have already been written in ansible_runner.config.runner
-            env_file_host = os.path.join(self.config.artifact_dir, 'env.list')
-            with open(env_file_host, 'w') as f:
-                f.write(
-                    '\n'.join(
-                        [f"{key}={value}" for key, value in self.config.env.items()]
-                    )
-                )
+            env_file_host = os.path.join(self.config.artifact_dir, "env.list")
+            with open(env_file_host, "w") as f:
+                f.write("\n".join([f"{key}={value}" for key, value in self.config.env.items()]))
         else:
             cwd = self.config.cwd
             pexpect_env = self.config.env
         env = {
-            ensure_str(k): ensure_str(v) if k != 'PATH' and isinstance(v, str) else v
-            for k, v in pexpect_env.items()
+            ensure_str(k): ensure_str(v) if k != "PATH" and isinstance(v, str) else v for k, v in pexpect_env.items()
         }
 
-        self.status_callback('running')
+        self.status_callback("running")
         self.last_stdout_update = time.time()
 
         # The subprocess runner interface provides stdin/stdout/stderr with streaming capability
         # to the caller if input_fd/output_fd/error_fd is passed to config class.
         # Alsp, provides an workaround for known issue in pexpect for long running non-interactive process
         # https://pexpect.readthedocs.io/en/stable/commonissues.html#truncated-output-just-before-child-exits
-        if self.runner_mode == 'subprocess':
-            if hasattr(self.config, 'input_fd') and self.config.input_fd:
+        if self.runner_mode == "subprocess":
+            if hasattr(self.config, "input_fd") and self.config.input_fd:
                 input_fd = self.config.input_fd
             else:
                 input_fd = None
 
-            if hasattr(self.config, 'output_fd') and self.config.output_fd:
+            if hasattr(self.config, "output_fd") and self.config.output_fd:
                 output_fd = self.config.output_fd
             else:
                 output_fd = PIPE
 
-            if hasattr(self.config, 'error_fd') and self.config.error_fd:
+            if hasattr(self.config, "error_fd") and self.config.error_fd:
                 error_fd = self.config.error_fd
             else:
                 error_fd = PIPE
 
-            subprocess_timeout = self.config.subprocess_timeout if hasattr(self.config, 'subprocess_timeout') else None
+            subprocess_timeout = self.config.subprocess_timeout if hasattr(self.config, "subprocess_timeout") else None
             try:
-                stdout_response = ''
-                stderr_response = ''
+                stdout_response = ""
+                stderr_response = ""
                 kwargs = {
-                    'cwd': cwd,
-                    'env': env,
-                    'stdin': input_fd,
-                    'stdout': output_fd,
-                    'stderr': error_fd,
-                    'universal_newlines': True,
+                    "cwd": cwd,
+                    "env": env,
+                    "stdin": input_fd,
+                    "stdout": output_fd,
+                    "stderr": error_fd,
+                    "universal_newlines": True,
                 }
                 if subprocess_timeout is not None:
-                    kwargs.update({'timeout': subprocess_timeout})
+                    kwargs.update({"timeout": subprocess_timeout})
 
                 proc_out = run_subprocess(command, check=True, **kwargs)
 
@@ -248,15 +256,27 @@ class Runner:
                 stderr_response = proc_out.stderr
                 self.rc = proc_out.returncode
             except CalledProcessError as exc:
-                logger.debug("%s execution failed, returncode: %s, output: %s, stdout: %s, stderr: %s",
-                             exc.cmd, exc.returncode, exc.output, exc.stdout, exc.stderr)
+                logger.debug(
+                    "%s execution failed, returncode: %s, output: %s, stdout: %s, stderr: %s",
+                    exc.cmd,
+                    exc.returncode,
+                    exc.output,
+                    exc.stdout,
+                    exc.stderr,
+                )
                 self.rc = exc.returncode
                 self.errored = True
                 stdout_response = exc.stdout
                 stderr_response = exc.stderr
             except TimeoutExpired as exc:
-                logger.debug("%s execution timedout, timeout: %s, output: %s, stdout: %s, stderr: %s",
-                             exc.cmd, exc.timeout, exc.output, exc.stdout, exc.stderr)
+                logger.debug(
+                    "%s execution timedout, timeout: %s, output: %s, stdout: %s, stderr: %s",
+                    exc.cmd,
+                    exc.timeout,
+                    exc.output,
+                    exc.stdout,
+                    exc.stderr,
+                )
                 self.rc = 254
                 stdout_response = exc.stdout
                 stderr_response = exc.stderr
@@ -289,16 +309,14 @@ class Runner:
                     cwd=cwd,
                     env=env,
                     ignore_sighup=True,
-                    encoding='utf-8',
-                    codec_errors='replace',
+                    encoding="utf-8",
+                    codec_errors="replace",
                     echo=False,
                     use_poll=self.config.pexpect_use_poll,
                 )
                 child.logfile_read = stdout_handle
             except pexpect.exceptions.ExceptionPexpect as e:
-                child = collections.namedtuple(
-                    'MissingProcess', 'exitstatus isalive expect close'
-                )(
+                child = collections.namedtuple("MissingProcess", "exitstatus isalive expect close")(
                     exitstatus=127,
                     isalive=lambda: False,
                     expect=lambda *args, **kwargs: None,
@@ -307,11 +325,11 @@ class Runner:
 
                 # create the events directory (the callback plugin won't run, so it
                 # won't get created)
-                events_directory = os.path.join(self.config.artifact_dir, 'job_events')
+                events_directory = os.path.join(self.config.artifact_dir, "job_events")
                 if not os.path.exists(events_directory):
                     os.mkdir(events_directory, 0o700)
                 stdout_handle.write(str(e))
-                stdout_handle.write('\n')
+                stdout_handle.write("\n")
 
             job_start = time.time()
             while child.isalive():
@@ -330,7 +348,11 @@ class Runner:
                         # if isinstance(extra_update_fields, dict):
                         #     extra_update_fields['job_explanation'] = "System error during job execution, check system logs"
                         raise CallbackError(f"Exception in Cancel Callback: {e}") from e
-                if self.config.job_timeout and not self.canceled and (time.time() - job_start) > self.config.job_timeout:
+                if (
+                    self.config.job_timeout
+                    and not self.canceled
+                    and (time.time() - job_start) > self.config.job_timeout
+                ):
                     self.timed_out = True
                     # if isinstance(extra_update_fields, dict):
                     #     extra_update_fields['job_explanation'] = "Job terminated due to timeout"
@@ -341,6 +363,11 @@ class Runner:
                     self.kill_container()
                     Runner.handle_termination(child.pid)
                     self.timed_out = True
+
+            logger.warning(f"CHILD_ISALIVE: {child.isalive()}")
+            logger.warning(
+                f"canceled: {self.canceled}, timedout: {self.timed_out}, errored: {self.errored}, rc: {self.rc}"
+            )
 
             # fix for https://github.com/ansible/ansible-runner/issues/1330
             # Since we're (ab)using pexpect's logging callback as our source of stdout data, we need to pump the stream one last
@@ -356,26 +383,27 @@ class Runner:
             self.rc = child.exitstatus if not (self.timed_out or self.canceled) else 254
 
         if self.canceled:
-            self.status_callback('canceled')
+            self.status_callback("canceled")
         elif self.rc == 0 and not self.timed_out:
-            self.status_callback('successful')
+            self.status_callback("successful")
         elif self.timed_out:
-            self.status_callback('timeout')
+            self.status_callback("timeout")
         else:
-            self.status_callback('failed')
+            self.status_callback("failed")
 
         for filename, data in [
-            ('status', self.status),
-            ('rc', self.rc),
+            ("status", self.status),
+            ("rc", self.rc),
         ]:
             artifact_path = os.path.join(self.config.artifact_dir, filename)
             if not os.path.exists(artifact_path):
                 os.close(os.open(artifact_path, os.O_CREAT, stat.S_IRUSR | stat.S_IWUSR))
-            with open(artifact_path, 'w') as f:
+            with open(artifact_path, "w") as f:
                 f.write(str(data))
         if self.directory_isolation_path and self.directory_isolation_cleanup:
             shutil.rmtree(self.directory_isolation_path)
         if self.process_isolation and self.process_isolation_path_actual:
+
             def _delete(retries=15):
                 try:
                     shutil.rmtree(self.process_isolation_path_actual)
@@ -387,6 +415,7 @@ class Runner:
                     if not res:
                         raise
                 return True
+
             _delete()
 
         if self.artifacts_handler is not None:
@@ -404,27 +433,27 @@ class Runner:
 
     @property
     def stdout(self):
-        '''
+        """
         Returns an open file handle to the stdout representing the Ansible run
-        '''
-        stdout_path = os.path.join(self.config.artifact_dir, 'stdout')
+        """
+        stdout_path = os.path.join(self.config.artifact_dir, "stdout")
         if not os.path.exists(stdout_path):
             raise AnsibleRunnerException("stdout missing")
-        return open(os.path.join(self.config.artifact_dir, 'stdout'), 'r')
+        return open(os.path.join(self.config.artifact_dir, "stdout"), "r")
 
     @property
     def stderr(self):
-        '''
+        """
         Returns an open file handle to the stderr representing the Ansible run
-        '''
-        stderr_path = os.path.join(self.config.artifact_dir, 'stderr')
+        """
+        stderr_path = os.path.join(self.config.artifact_dir, "stderr")
         if not os.path.exists(stderr_path):
             raise AnsibleRunnerException("stderr missing")
-        return open(os.path.join(self.config.artifact_dir, 'stderr'), 'r')
+        return open(os.path.join(self.config.artifact_dir, "stderr"), "r")
 
     @property
     def events(self):
-        '''
+        """
         A generator that will return all ansible job events in the order that they were emitted from Ansible
 
         :Example:
@@ -463,10 +492,10 @@ class Runner:
                   "task_path": "/tmp/demo/project/test.yml:3"
                }
            }
-        '''
+        """
         # collection of all the events that were yielded
         old_events = {}
-        event_path = os.path.join(self.config.artifact_dir, 'job_events')
+        event_path = os.path.join(self.config.artifact_dir, "job_events")
 
         # Wait for events dir to be created
         now = datetime.datetime.now()
@@ -488,59 +517,59 @@ class Runner:
 
     @property
     def stats(self):
-        '''
+        """
         Returns the final high level stats from the Ansible run
 
         Example:
             {'dark': {}, 'failures': {}, 'skipped': {}, 'ok': {u'localhost': 2}, 'processed': {u'localhost': 1}}
-        '''
-        last_event = list(filter(lambda x: 'event' in x and x['event'] == 'playbook_on_stats',
-                                 self.events))
+        """
+        last_event = list(filter(lambda x: "event" in x and x["event"] == "playbook_on_stats", self.events))
         if not last_event:
             return None
-        last_event = last_event[0]['event_data']
-        return {'skipped': last_event.get('skipped', {}),
-                'ok': last_event.get('ok', {}),
-                'dark': last_event.get('dark', {}),
-                'failures': last_event.get('failures', {}),
-                'ignored': last_event.get('ignored', {}),
-                'rescued': last_event.get('rescued', {}),
-                'processed': last_event.get('processed', {}),
-                'changed': last_event.get('changed', {})
-                }
+        last_event = last_event[0]["event_data"]
+        return {
+            "skipped": last_event.get("skipped", {}),
+            "ok": last_event.get("ok", {}),
+            "dark": last_event.get("dark", {}),
+            "failures": last_event.get("failures", {}),
+            "ignored": last_event.get("ignored", {}),
+            "rescued": last_event.get("rescued", {}),
+            "processed": last_event.get("processed", {}),
+            "changed": last_event.get("changed", {}),
+        }
 
     def host_events(self, host):
-        '''
+        """
         Given a host name, this will return all task events executed on that host
-        '''
-        all_host_events = filter(lambda x: 'event_data' in x and 'host' in x['event_data'] and x['event_data']['host'] == host,
-                                 self.events)
+        """
+        all_host_events = filter(
+            lambda x: "event_data" in x and "host" in x["event_data"] and x["event_data"]["host"] == host, self.events
+        )
         return all_host_events
 
     def kill_container(self):
-        '''
+        """
         Internal method to terminate a container being used for job isolation
-        '''
+        """
         container_name = self.config.container_name
         if container_name:
             container_cli = self.config.process_isolation_executable
-            cmd = [container_cli, 'kill', container_name]
+            cmd = [container_cli, "kill", container_name]
             with Popen(cmd, stdout=PIPE, stderr=PIPE) as proc:
                 _, stderr = proc.communicate()
                 if proc.returncode:
-                    logger.info("Error from %s kill %s command:\n%s",
-                                container_cli, container_name, stderr)
+                    logger.info("Error from %s kill %s command:\n%s", container_cli, container_name, stderr)
                 else:
                     logger.info("Killed container %s", container_name)
 
     @classmethod
     def handle_termination(cls, pid, pidfile=None):
-        '''
+        """
         Internal method to terminate a subprocess spawned by ``pexpect`` representing an invocation of runner.
 
         :param pid:       the process id of the running the job.
         :param pidfile:   the daemon's PID file
-        '''
+        """
 
         try:
             pgroup = os.getpgid(pid)
@@ -553,11 +582,13 @@ class Runner:
             pass
 
     def get_fact_cache(self, host):
-        '''
+        """
         Get the entire fact cache only if the fact_cache_type is 'jsonfile'
-        '''
-        if self.config.fact_cache_type != 'jsonfile':
-            raise Exception('Unsupported fact cache type.  Only "jsonfile" is supported for reading and writing facts from ansible-runner')
+        """
+        if self.config.fact_cache_type != "jsonfile":
+            raise Exception(
+                'Unsupported fact cache type.  Only "jsonfile" is supported for reading and writing facts from ansible-runner'
+            )
         fact_cache = os.path.join(self.config.fact_cache, host)
         if os.path.exists(fact_cache):
             with open(fact_cache) as f:
@@ -565,13 +596,15 @@ class Runner:
         return {}
 
     def set_fact_cache(self, host, data):
-        '''
+        """
         Set the entire fact cache data only if the fact_cache_type is 'jsonfile'
-        '''
-        if self.config.fact_cache_type != 'jsonfile':
-            raise Exception('Unsupported fact cache type.  Only "jsonfile" is supported for reading and writing facts from ansible-runner')
+        """
+        if self.config.fact_cache_type != "jsonfile":
+            raise Exception(
+                'Unsupported fact cache type.  Only "jsonfile" is supported for reading and writing facts from ansible-runner'
+            )
         fact_cache = os.path.join(self.config.fact_cache, host)
         if not os.path.exists(os.path.dirname(fact_cache)):
             os.makedirs(os.path.dirname(fact_cache), mode=0o700)
-        with open(fact_cache, 'w') as f:
+        with open(fact_cache, "w") as f:
             return f.write(json.dumps(data))
