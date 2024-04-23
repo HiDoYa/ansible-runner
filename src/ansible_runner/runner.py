@@ -366,7 +366,7 @@ class Runner:
 
             logger.warning(f"CHILD_ISALIVE: {child.isalive()}")
             logger.warning(
-                f"canceled: {self.canceled}, timedout: {self.timed_out}, errored: {self.errored}, rc: {self.rc}"
+                f"canceled: {self.canceled}, timedout: {self.timed_out}, errored: {self.errored}, rc: {self.rc}, status: {self.status}"
             )
 
             # fix for https://github.com/ansible/ansible-runner/issues/1330
