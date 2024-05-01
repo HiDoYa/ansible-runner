@@ -323,8 +323,6 @@ class Runner:
                     close=lambda: None,
                 )
 
-                logger.warning(f"CHILD_CREATE FAILED")
-
                 # create the events directory (the callback plugin won't run, so it
                 # won't get created)
                 events_directory = os.path.join(self.config.artifact_dir, "job_events")
@@ -365,14 +363,6 @@ class Runner:
                     self.kill_container()
                     Runner.handle_termination(child.pid)
                     self.timed_out = True
-
-            logger.warning(f"CHILD_ISALIVE: {child.isalive()}")
-            logger.warning(
-                f"canceled: {self.canceled}, timedout: {self.timed_out}, errored: {self.errored}, rc: {self.rc}, status: {self.status}"
-            )
-            for h in logger.handlers:
-                h.flush()
-            raise e
 
             # fix for https://github.com/ansible/ansible-runner/issues/1330
             # Since we're (ab)using pexpect's logging callback as our source of stdout data, we need to pump the stream one last
