@@ -302,14 +302,14 @@ def display_with_context(f):
             try:
                 fileobj = sys.stderr if stderr else sys.stdout
                 event_context.add_local(uuid=str(uuid.uuid4()))
-                print("AWX_DISPLAY: capture_event_data dump_begin before")
+                print("AWX_DISPLAY: display_with_context dump_begin before")
                 event_context.dump_begin(fileobj)
-                print("AWX_DISPLAY: capture_event_data dump_begin end")
+                print("AWX_DISPLAY: display_with_context dump_begin end")
                 return f(*args, **kwargs)
             finally:
-                print("AWX_DISPLAY: capture_event_data dump_end before")
+                print("AWX_DISPLAY: display_with_context dump_end before")
                 event_context.dump_end(fileobj)
-                print("AWX_DISPLAY: capture_event_data dump_end end")
+                print("AWX_DISPLAY: display_with_context dump_end end")
                 event_context.remove_local(uuid=None)
 
     return wrapper
