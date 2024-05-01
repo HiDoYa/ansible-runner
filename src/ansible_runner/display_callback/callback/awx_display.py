@@ -238,7 +238,7 @@ class EventContext:
     def dump_begin(self, fileobj):
         begin_dict = self.get_begin_dict()
         self.cache.set(f":1:ev-{begin_dict['uuid']}", begin_dict)
-        self.dump(fileobj, {'uuid': begin_dict['uuid']})
+        self.dump(fileobj, {'uuid': begin_dict['uuid']}, flush=True)
 
     def dump_end(self, fileobj):
         self.dump(fileobj, self.get_end_dict(), flush=True)
@@ -302,14 +302,14 @@ def display_with_context(f):
             try:
                 fileobj = sys.stderr if stderr else sys.stdout
                 event_context.add_local(uuid=str(uuid.uuid4()))
-                print("AWX_DISPLAY: display_with_context dump_begin before")
+                # print("AWX_DISPLAY: display_with_context dump_begin before")
                 event_context.dump_begin(fileobj)
-                print("AWX_DISPLAY: display_with_context dump_begin end")
+                # print("AWX_DISPLAY: display_with_context dump_begin end")
                 return f(*args, **kwargs)
             finally:
-                print("AWX_DISPLAY: display_with_context dump_end before")
+                # print("AWX_DISPLAY: display_with_context dump_end before")
                 event_context.dump_end(fileobj)
-                print("AWX_DISPLAY: display_with_context dump_end end")
+                # print("AWX_DISPLAY: display_with_context dump_end end")
                 event_context.remove_local(uuid=None)
 
     return wrapper
@@ -379,14 +379,14 @@ class CallbackModule(DefaultCallbackModule):
                 event_context.add_local(event=event, **event_data)
                 if task:
                     self.set_task(task, local=True)
-                print("AWX_DISPLAY: capture_event_data dump_begin before")
+                # print("AWX_DISPLAY: capture_event_data dump_begin before")
                 event_context.dump_begin(sys.stdout)
-                print("AWX_DISPLAY: capture_event_data dump_begin end")
+                # print("AWX_DISPLAY: capture_event_data dump_begin end")
                 yield
             finally:
-                print("AWX_DISPLAY: capture_event_data dump_end before")
+                # print("AWX_DISPLAY: capture_event_data dump_end before")
                 event_context.dump_end(sys.stdout)
-                print("AWX_DISPLAY: capture_event_data dump_end after")
+                # print("AWX_DISPLAY: capture_event_data dump_end after")
                 if task:
                     self.clear_task(local=True)
                 event_context.remove_local(event=None, **event_data)
